@@ -1,0 +1,42 @@
+[project]
+name = "botkit"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "NiceBots.xyz", email = "hello@nicebots.xyz"},
+]
+dependencies = [
+    "py-cord>=2.5.0",
+    "aiohttp>=3.9.5",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.1",
+    "orjson>=3.10.5",
+    "pytz>=2024.1",
+    "typing-extensions>=4.12.2",
+    "schema>=0.7.7",
+    "hypercorn>=0.17.3",
+    "quart>=0.19.6",
+]
+requires-python = "==3.11.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.pdm.scripts]
+lint = "black ."
+export = "pdm export -o requirements.txt --without-hashes --prod"
+tests = "pytest tests"
+start = "python main.py"
+check-listings = {call = "scripts:check_listings.main"}
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "black>=24.4.2",
+    "pytest>=8.2.2",
+    "beautifulsoup4>=4.12.3",
+    "nodriver>=0.32",
+    "markdown>=3.6",
+    "termcolor>=2.4.0",
+]
