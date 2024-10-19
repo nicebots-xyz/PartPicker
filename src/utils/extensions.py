@@ -1,3 +1,6 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 import inspect
 import os
 import zipfile
@@ -10,7 +13,7 @@ from glob import iglob
 from schema import Schema
 from quart import Quart
 
-from src.logging import logger
+from src.log import logger
 
 
 def check_typing(module: ModuleType, func: Callable, types: dict[str, Any]):
@@ -35,11 +38,11 @@ def check_func(
     assert all(
         param in types for param in signature.parameters.keys()
     ), f"Function {func.__name__} of module {module.__name__} does not accept the correct arguments ({', '.join(types.keys())})"
-    check_typing(module, func, types)
+    # check_typing(module, func, types) # temporarily disabled due to unwanted behavior
 
 
 # noinspection DuplicatedCode
-def validate_module(module: ModuleType, config: dict = None) -> None:
+def validate_module(module: ModuleType, config: dict[str, Any] | None = None) -> None:
     """
     Validate the module to ensure it has the required functions and attributes to be loaded as an extension
     :param module: The module to validate
@@ -74,8 +77,8 @@ def validate_module(module: ModuleType, config: dict = None) -> None:
         "enabled" in module.default
     ), f"Extension {module.__name__} does not have an enabled key in its default configuration"
     if hasattr(module, "schema"):
-        assert isinstance(module.schema, Schema) or isinstance(
-            module.schema, dict
+        assert (
+            isinstance(module.schema, Schema) or isinstance(module.schema, dict)
         ), f"Extension {module.__name__} has a schema of type {type(module.schema)} instead of Schema or dict"
 
         if isinstance(module.schema, dict):

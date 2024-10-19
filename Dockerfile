@@ -1,3 +1,6 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 # For more information, please refer to https://aka.ms/vscode-docker-python
 FROM python:3.12-slim-bookworm
 
@@ -27,4 +30,4 @@ USER appuser
 COPY ./ /app/
 
 # We run the application
-CMD ["python", "main.py"]
+CMD ["python", "src"]

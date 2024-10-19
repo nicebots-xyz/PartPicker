@@ -1,3 +1,6 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 import yaml
 import os
 import orjson
@@ -11,7 +14,6 @@ SPLIT: str = "__"
 
 
 def load_from_env() -> dict[str, dict[str, Any]]:
-
     _config = {}
     values = {k: v for k, v in os.environ.items() if k.startswith(f"BOTKIT{SPLIT}")}
     values = {k[len(f"BOTKIT{SPLIT}") :]: v for k, v in values.items()}
@@ -58,13 +60,13 @@ if os.path.exists("config.yaml"):
 elif os.path.exists("config.yml"):
     path = "config.yml"
 
-
+config: dict[str, dict[str, Any]]
 if path:
     # noinspection PyArgumentEqualDefault
     with open(path, "r", encoding="utf-8") as f:
-        config: dict[str, dict[str, Any]] = yaml.safe_load(f)
+        config = yaml.safe_load(f)
 else:
-    config: dict[str, dict[str, Any]] = load_from_env()
+    config = load_from_env()
 
 
 def store_config() -> None:

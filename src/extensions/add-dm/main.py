@@ -1,10 +1,11 @@
-import discord
-import aiohttp
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
 
-from quart import Quart
+import discord
+
 from discord.ext import commands
 from schema import Schema
-from src.logging import logger
+from src.log import logger
 
 
 default = {
@@ -37,7 +38,7 @@ class AddDM(commands.Cog):
         try:
             await user.send(self.config["message"].format(user=user))
         except discord.Forbidden:
-            logger.warning(f"Failed to send DM when joining a guild")
+            logger.warning("Failed to send DM when joining a guild")
 
 
 def setup(bot: discord.Bot, config: dict) -> None:

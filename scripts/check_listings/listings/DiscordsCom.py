@@ -1,7 +1,9 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 import nodriver as uc
 
 from bs4 import BeautifulSoup
-from asyncio import TimeoutError
 
 from .Listing import Listing, NotFoundError
 
@@ -19,6 +21,7 @@ class DiscordsCom(Listing):
         description = await page.select("app-bot-page-description")
         html = await description.get_html()
         soup = BeautifulSoup(html, "html.parser")
+
         text = self.normalize_soup(soup)
         if not text:
             raise NotFoundError("Listing not found")

@@ -1,11 +1,14 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 import discord
-import aiohttp
 
-from quart import Quart
 from discord.ext import commands
-from schema import Schema
-from src.logging import logger
+from schema import Schema, Optional
 
+from src import custom
+from .handler import handle_error
+from typing import Any
 
 default = {
     "enabled": True,
@@ -14,30 +17,41 @@ default = {
 schema = Schema(
     {
         "enabled": bool,
+        Optional("sentry"): {"dsn": str},
     }
 )
 
 
 class NiceErrors(commands.Cog):
-    def __init__(self, bot: discord.Bot):
+    def __init__(self, bot: discord.Bot, sentry_sdk: bool, config: dict[str, Any]):
         self.bot = bot
+        self.sentry_sdk = sentry_sdk
+        self.config = config
 
     @discord.Cog.listener("on_application_command_error")
     async def on_error(
         self,
-        ctx: discord.ApplicationContext,
+        ctx: custom.ApplicationContext,
         error: discord.ApplicationCommandInvokeError,
     ):
-        if not isinstance(error.original, discord.Forbidden):
-            await ctx.respond(
-                "Whoops! An error occurred while executing this command", ephemeral=True
-            )
-            raise error
-        await ctx.respond(
-            f"Whoops! I don't have permission to do that\n`{error.args[0].split(':')[-1].strip()}`",
-            ephemeral=True,
+        await handle_error(
+            error,
+            ctx,
+            raw_translations=self.config["translations"],
+            use_sentry_sdk=self.sentry_sdk,
+        )
+
+    @discord.Cog.listener("on_command_error")
+    async def on_command_error(
+        self, ctx: custom.ExtContext, error: commands.CommandError
+    ):
+        await handle_error(
+            error,
+            ctx,
+            raw_translations=self.config["translations"],
+            use_sentry_sdk=self.sentry_sdk,
         )
 
 
-def setup(bot: discord.Bot) -> None:
-    bot.add_cog(NiceErrors(bot))
+def setup(bot: custom.Bot, config: dict[str, Any]) -> None:
+    bot.add_cog(NiceErrors(bot, bool(config.get("sentry", {}).get("dsn")), config))

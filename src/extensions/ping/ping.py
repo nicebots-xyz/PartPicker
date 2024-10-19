@@ -1,11 +1,15 @@
+# Copyright (c) NiceBots.xyz
+# SPDX-License-Identifier: MIT
+
 import discord
 import aiohttp
 
 from quart import Quart
 from discord.ext import commands
 from schema import Schema
-from src.logging import logger
-
+from src.log import logger
+from src import custom
+from discord.ext import bridge
 
 default = {
     "enabled": True,
@@ -19,21 +23,23 @@ schema = Schema(
 
 
 class Ping(commands.Cog):
-    def __init__(self, bot: discord.Bot):
+    def __init__(self, bot: custom.Bot):
         self.bot = bot
 
     @discord.slash_command(name="ping")
     async def ping(
         self,
-        ctx: discord.ApplicationContext,
+        ctx: custom.ApplicationContext,
         ephemeral: bool = False,
-        embed: bool = False,
+        use_embed: bool = False,
     ):
         await ctx.defer(ephemeral=ephemeral)
-        if embed:
+        if use_embed:
             embed = discord.Embed(
                 title="Pong!",
-                description=f"{round(self.bot.latency * 1000)}ms",
+                description=ctx.translations.response.format(
+                    latency=round(self.bot.latency * 1000)
+                ),
                 color=discord.Colour.blurple(),
             )
             return await ctx.respond(embed=embed, ephemeral=ephemeral)
@@ -42,8 +48,35 @@ class Ping(commands.Cog):
         )
 
 
-def setup(bot: discord.Bot):
-    bot.add_cog(Ping(bot))
+class BridgePing(commands.Cog):
+    def __init__(self, bot: custom.Bot):
+        self.bot = bot
+
+    @bridge.bridge_command()
+    async def ping(
+        self,
+        ctx: "custom.Context",
+        ephemeral: bool = False,
+        use_embed: bool = False,
+    ):
+        await ctx.defer(ephemeral=ephemeral)
+        if use_embed:
+            embed = discord.Embed(
+                title="Pong!",
+                description=ctx.translations.response.format(
+                    latency=round(self.bot.latency * 1000)
+                ),
+                color=discord.Colour.blurple(),
+            )
+            return await ctx.respond(embed=embed, ephemeral=ephemeral)
+        return await ctx.respond(
+            f"Pong! {round(self.bot.latency * 1000)}ms", ephemeral=ephemeral
+        )
+
+
+def setup(bot: custom.Bot):
+    # bot.add_cog(Ping(bot))
+    bot.add_cog(BridgePing(bot))
 
 
 def setup_webserver(app: Quart, bot: discord.Bot):
