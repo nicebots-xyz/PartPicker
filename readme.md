@@ -24,6 +24,14 @@ The PartPicker Bot enhances your Discord server by automatically processing PCPa
 - Creates detailed embeds with parts information
 - Handles up to 5 links per message
 - Ignores bot messages and messages with "no-pcpp"
+- Implements automatic caching to improve performance
+- Utilizes PCPartPicker requests throttling to prevent API abuse
+
+### Advanced Features
+
+- **Automatic Caching**: The bot stores previously fetched part information, reducing redundant API calls and improving response times for frequently shared builds.
+
+- **Request Throttling**: To ensure fair usage of the PCPartPicker API and prevent potential rate limiting, the bot implements intelligent request throttling. This helps maintain a balance between responsiveness and responsible API usage.
 
 ## Setup
 

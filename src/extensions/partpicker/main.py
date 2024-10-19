@@ -6,7 +6,9 @@ import re
 from .scraper import PartPickerManager
 from discord.ext import commands
 from schema import Schema
-from src.logging import logger
+import logging
+
+logger = logging.getLogger("bot").getChild("partpicker")
 
 
 default = {
