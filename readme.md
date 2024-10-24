@@ -69,8 +69,8 @@ use:
 >[!CAUTION]
 >To follow the license terms, you must include the following in your Discord Bot Description:
 ```
-This Discord Bot, [Bot Name], is based on [Software Name] by NiceBots.xyz.
-Original Source: [Link to Original Source]
+This Discord Bot, [Bot Name], is based on PartPicker by NiceBots.xyz.
+Original Source: https://github.com/nicebots-xyz/PartPicker
 This version has been modified by [Your Name/Entity], accessible at [Link to Your Fork],
 is operated by [Your Name/Entity] and is not affiliated with NiceBots.xyz or Discord Inc.
 ```
