@@ -4,8 +4,8 @@
 aiocache==0.12.3
 aiofiles==24.1.0
 aiohappyeyeballs==2.4.4
-aiohttp==3.11.8
-aiolimiter==1.1.1
+aiohttp==3.11.10
+aiolimiter==1.2.0
 aiosignal==1.3.1
 annotated-types==0.7.0
 attrs==24.2.0
@@ -32,9 +32,9 @@ markupsafe==3.0.2
 multidict==6.1.0
 orjson==3.10.12
 priority==2.0.0
-propcache==0.2.0
+propcache==0.2.1
 py-cord==2.6.1
-pydantic==2.10.2
+pydantic==2.10.3
 pydantic-core==2.27.1
 pypartpicker==1.9.5
 pyreadline3==3.5.4; sys_platform == "win32" and python_version >= "3.8"
@@ -49,4 +49,4 @@ typing-extensions==4.12.2
 urllib3==2.2.3
 werkzeug==3.1.3
 wsproto==1.2.0
-yarl==1.18.0
+yarl==1.18.3
