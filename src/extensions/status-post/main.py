@@ -1,14 +1,15 @@
 # Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
 
-import discord
+import math
+from typing import Any
+
 import aiohttp
-
-from discord.ext import commands
+import discord
+from discord.ext import commands, tasks
 from schema import Schema
-from src.log import logger
-from discord.ext import tasks
 
+from src.log import logger
 
 default = {
     "enabled": False,
@@ -21,35 +22,36 @@ schema = Schema(
         "enabled": bool,
         "url": str,
         "every": int,
-    }
+    },
 )
 
 
 class Status(commands.Cog):
-    def __init__(self, bot: discord.Bot, config: dict):
-        self.bot = bot
-        self.config = config
-        self.push_status_loop = tasks.loop(seconds=self.config["every"])(
-            self.push_status_loop
-        )
+    def __init__(self, bot: discord.Bot, config: dict[Any, Any]) -> None:
+        self.bot: discord.Bot = bot
+        self.config: dict[Any, Any] = config
+        self.push_status_loop: tasks.Loop = tasks.loop(seconds=self.config["every"])(self.push_status_loop_meth)  # pyright: ignore [reportMissingTypeArgument]
 
     @commands.Cog.listener(once=True)
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         self.push_status_loop.start()
 
-    async def push_status_loop(self):
+    async def push_status_loop_meth(self) -> None:
         try:
             await self.push_status()
             logger.info("Pushed status.")
-        except Exception as e:
-            logger.error(f"Failed to push status: {e}")
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to push status.")
 
-    async def push_status(self):
-        ping = str(round(self.bot.latency * 1000))
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self.config["url"] + ping) as resp:
-                resp.raise_for_status()
+    async def push_status(self) -> None:
+        latency = self.bot.latency
+        if latency == float("inf") or math.isnan(latency):
+            logger.warning("Latency is infinite or NaN, skipping status push.")
+            return
+        ping = str(round(latency * 1000))
+        async with aiohttp.ClientSession() as session, session.get(self.config["url"] + ping) as resp:
+            resp.raise_for_status()
 
 
-def setup(bot: discord.Bot, config: dict):
+def setup(bot: discord.Bot, config: dict[Any, Any]) -> None:
     bot.add_cog(Status(bot, config))

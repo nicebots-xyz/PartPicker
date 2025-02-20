@@ -1,8 +1,9 @@
 # Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
 
-from typing import Any
-from typing_extensions import override
+from collections.abc import Generator, Iterator
+from typing import Any, Self, override
+
 from pydantic import BaseModel, Field
 
 LOCALES = (
@@ -42,11 +43,11 @@ DEFAULT = "en-US"
 
 
 class RawTranslation(BaseModel):
-    en_US: str | None = Field(None, alias="en-US")
-    en_GB: str | None = Field(None, alias="en-GB")
+    en_US: str | None = Field(None, alias="en-US")  # noqa: N815
+    en_GB: str | None = Field(None, alias="en-GB")  # noqa: N815
     bg: str | None = None
-    zh_CN: str | None = Field(None, alias="zh-CN")
-    zh_TW: str | None = Field(None, alias="zh-TW")
+    zh_CN: str | None = Field(None, alias="zh-CN")  # noqa: N815
+    zh_TW: str | None = Field(None, alias="zh-TW")  # noqa: N815
     hr: str | None = None
     cs: str | None = None
     da: str | None = None
@@ -63,12 +64,12 @@ class RawTranslation(BaseModel):
     lt: str | None = None
     no: str | None = None
     pl: str | None = None
-    pt_BR: str | None = Field(None, alias="pt-BR")
+    pt_BR: str | None = Field(None, alias="pt-BR")  # noqa: N815
     ro: str | None = None
     ru: str | None = None
-    es_ES: str | None = Field(None, alias="es-ES")
+    es_ES: str | None = Field(None, alias="es-ES")  # noqa: N815
     es_419: str | None = Field(None, alias="es-419")
-    sv_SE: str | None = Field(None, alias="sv-SE")
+    sv_SE: str | None = Field(None, alias="sv-SE")  # noqa: N815
     th: str | None = None
     tr: str | None = None
     uk: str | None = None
@@ -79,33 +80,89 @@ class RawTranslation(BaseModel):
 
 
 class Translation(BaseModel):
-    def get_for_locale(self, locale: str) -> "TranslationWrapper":
+    def get_for_locale(self, locale: str) -> "TranslationWrapper[Self]":
         return apply_locale(self, locale)
 
 
-class TranslationWrapper:
-    def __init__(self, model: "Translatable", locale: str, default: str = DEFAULT):
-        self._model = model
+class TranslationWrapper[T: "Translatable"]:
+    def __init__(self, model: "Translatable", locale: str, default: str = DEFAULT) -> None:
+        self._model: T = model
         self._default: str
         self.default = default.replace("-", "_")
         self._locale: str
         self.locale = locale.replace("-", "_")
 
+    def _wrap_value(self, value: Any) -> Any:
+        """Consistently wrap values in TranslationWrapper if needed."""
+        if value is None:
+            return None
+        if isinstance(value, str | int | float | bool):
+            return value
+        if isinstance(value, RawTranslation):
+            try:
+                return getattr(value, self._locale) or getattr(value, self._default)
+            except AttributeError:
+                return getattr(value, self._default)
+        if isinstance(value, list | tuple):
+            return [self._wrap_value(item) for item in value]
+
+        # For any other type (including Pydantic models), apply locale
+        return apply_locale(value, self._locale)
+
     def __getattr__(self, key: str) -> Any:
         if isinstance(self._model, dict):
-            applicable = self._model.get(key)
-            if not applicable:
+            if key not in self._model:
                 raise AttributeError(f'Key "{key}" not found in {self._model}')
+            value = self._model[key]
         else:
-            applicable = getattr(self._model, key)
-        if isinstance(applicable, RawTranslation):
-            try:
-                return getattr(applicable, self._locale) or getattr(
-                    applicable, self._default
-                )
-            except AttributeError:
-                return getattr(applicable, self._default)
-        return apply_locale(applicable, self._locale)
+            value = getattr(self._model, key)
+        return self._wrap_value(value)
+
+    def __getitem__(self, item: Any) -> Any:
+        if isinstance(self._model, dict):
+            if not isinstance(item, str):
+                raise TypeError(f"Key must be a string, not {type(item).__name__}")
+            return self.__getattr__(item)
+        if isinstance(self._model, list):
+            if not isinstance(item, int):
+                raise TypeError(f"Index must be an integer, not {type(item).__name__}")
+            return self._wrap_value(self._model[item])
+        return self.__getattr__(item)
+
+    def keys(self) -> Generator[str, None, None]:
+        if not isinstance(self._model, dict):
+            raise TypeError(f"Cannot get keys from {type(self._model).__name__}")
+        yield from self._model.keys()
+
+    def items(self) -> Generator[tuple[str, Any], None, None]:
+        if isinstance(self._model, dict):
+            for key, value in self._model.items():
+                yield key, self._wrap_value(value)
+        else:
+            for key in self.keys():
+                yield key, self._wrap_value(getattr(self._model, key))
+
+    def values(self) -> Generator[Any, None, None]:
+        if isinstance(self._model, dict):
+            for value in self._model.values():
+                yield self._wrap_value(value)
+        else:
+            for key in self.keys():
+                yield self._wrap_value(getattr(self._model, key))
+
+    def __iter__(self) -> Iterator[Any]:
+        if isinstance(self._model, list):
+            for item in self._model:
+                yield self._wrap_value(item)
+        else:
+            yield from self.keys()
+
+    def __len__(self) -> int:
+        if isinstance(self._model, dict):
+            return len(self._model)
+        if isinstance(self._model, list):
+            return len(self._model)
+        return len(self._model.__dict__)
 
     @property
     def locale(self) -> str:
@@ -131,7 +188,7 @@ class TranslationWrapper:
 
     @override
     def __repr__(self) -> str:
-        return repr(self._model)
+        return f"TranslationWrapper({self._model!r}, locale={self._locale!r}, default={self._default!r})"
 
     @override
     def __str__(self) -> str:
@@ -162,9 +219,7 @@ class Deg1CommandTranslation(CommandTranslation):
     commands: dict[str, Deg2CommandTranslation] | None = None
 
 
-AnyCommandTranslation = (
-    Deg1CommandTranslation | Deg2CommandTranslation | Deg3CommandTranslation
-)
+AnyCommandTranslation = Deg1CommandTranslation | Deg2CommandTranslation | Deg3CommandTranslation
 
 
 class ExtensionTranslation(Translation):
@@ -172,11 +227,11 @@ class ExtensionTranslation(Translation):
     strings: dict[str, RawTranslation] | None = None
 
 
-def apply_locale(
-    model: "Translatable | TranslationWrapper",
+def apply_locale[T: "Translatable"](
+    model: T,
     locale: str | None,
     default: str | None = DEFAULT,
-) -> TranslationWrapper:
+) -> TranslationWrapper[T]:
     default = default if default is not None else DEFAULT
     if locale is None:
         locale = DEFAULT
