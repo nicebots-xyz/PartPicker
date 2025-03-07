@@ -1,12 +1,15 @@
 # Copyright (c) NiceBots all rights reserved - refer to LICENSE file in the root
 
-import discord
+import logging
 import re
 
-from .scraper import PartPickerManager
+import discord
 from discord.ext import commands
 from schema import Schema
-import logging
+
+from src import custom
+
+from .scraper import PartPickerManager
 
 logger = logging.getLogger("bot").getChild("partpicker")
 
@@ -24,15 +27,18 @@ schema = Schema(
 pcpartpicker_pattern = r"https?://(?:(?:[\w-]+\.)?pcpartpicker\.com)/list/[\w-]+"
 
 
-def find_pcpartpicker_links(text, unique=True) -> list[str]:
-    """
-    Find all PCPartPicker links in the given text.
+def find_pcpartpicker_links(text: str, unique: bool = True) -> list[str]:
+    """Find all PCPartPicker links in the given text.
 
     Args:
+    ----
     text (str): The input text to search for PCPartPicker links.
+    unique (bool): Whether to return only unique links.
 
     Returns:
+    -------
     list: A list of all PCPartPicker links found in the text.
+
     """
     if unique:
         return list(set(re.findall(pcpartpicker_pattern, text)))
@@ -40,7 +46,7 @@ def find_pcpartpicker_links(text, unique=True) -> list[str]:
 
 
 class PartPicker(commands.Cog):
-    def __init__(self, bot: discord.Bot):
+    def __init__(self, bot: discord.Bot) -> None:
         self.bot = bot
         self.part_picker_manager = PartPickerManager(logger)
 
@@ -48,7 +54,7 @@ class PartPicker(commands.Cog):
     async def on_message(
         self,
         message: discord.Message,
-    ):
+    ) -> None:
         if message.author.bot:
             return
         if "no-pcpp" in message.content:
@@ -60,7 +66,7 @@ class PartPicker(commands.Cog):
             try:
                 parts_list = await self.part_picker_manager.fetch_list(url)
             except Exception as e:
-                logger.error(f"Error fetching PCPartPicker list: {e}")
+                logger.exception("Error fetching PCPartPicker list", exc_info=e)
                 continue
             embed = discord.Embed(
                 title=parts_list.url,
@@ -68,15 +74,12 @@ class PartPicker(commands.Cog):
                 color=discord.Color.blurple(),
             )
             embed.set_author(name="PCPartPicker")
-            description = "\n".join(
-                f"**{part.type}** - [{part.name}]({part.url})"
-                for part in parts_list.parts
-            )
+            description = "\n".join(f"**{part.type}** - [{part.name}]({part.url})" for part in parts_list.parts)
             embed.description = description
             embeds.append(embed)
         await message.reply(embeds=embeds, mention_author=False)
 
 
-def setup(bot: discord.Bot) -> None:
-    bot._connection._intents.message_content = True
+def setup(bot: custom.Bot) -> None:
+    bot.intents.message_content = True
     bot.add_cog(PartPicker(bot))

@@ -84,7 +84,8 @@ def load_extensions() -> tuple[
 ]:
     """Load extensions from the extensions directory.
 
-    Returns:
+    Returns
+    -------
         tuple[FunctionlistType, FunctionlistType, FunctionlistType, list[ExtensionTranslation]]: A tuple containing
         the bot functions, backend functions, startup functions, and translations.
 

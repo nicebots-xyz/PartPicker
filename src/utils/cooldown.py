@@ -79,6 +79,7 @@ def cooldown[C: commands.Cog, **P](
     """Enhanced cooldown decorator that supports different bucket types.
 
     Args:
+    ----
         key: Base key for the cooldown
         limit: Number of uses allowed
         per: Time period in seconds
