@@ -27,7 +27,7 @@ dependencies = [
     "aiolimiter>=1.1.0",
     "pycord-rest-bot>=0.1.0a7",
 ]
-requires-python = "==3.12.*"
+requires-python = "==3.14.*"
 readme = "README.md"
 license = {text = "MIT"}
 
