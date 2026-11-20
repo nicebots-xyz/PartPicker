@@ -23,9 +23,6 @@ The PartPicker Bot enhances your Discord server by automatically processing PCPa
 
 ## Setup
 
->[!IMPORTANT]
->Follow these steps carefully to comply with licensing terms:
-
 1. **Clone the Repository**
 ```
 git clone https://github.com/nicebots-xyz/PartPicker.git
