@@ -24,7 +24,7 @@ dependencies = [
     "aerich[toml]>=0.8.1",
     "py-cord>=2.7.0rc2",
     "cachetools>=7.0.1",
-    "pypartpicker>=1.9.5,<2.0.0",
+    "pypartpicker>=2.0.5,<2.1.0",
     "aiolimiter>=1.1.0",
     "tortoise-extensions[s3]~=0.0.2",
 ]
