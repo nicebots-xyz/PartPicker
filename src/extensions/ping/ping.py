@@ -1,32 +1,28 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
 import aiohttp
 import discord
-from discord.ext import bridge, commands
-from quart import Quart
-from schema import Schema
+from discord.ext import commands
+from fastapi import FastAPI
 
 from src import custom
 from src.log import logger
 from src.utils.cooldown import BucketType, cooldown
 
+from .translation_types import PingCommandStrings
+
 default = {
     "enabled": True,
 }
 
-schema = Schema(
-    {
-        "enabled": bool,
-    },
-)
 
-
-class BridgePing(commands.Cog):
+class Ping(commands.Cog):
     def __init__(self, bot: custom.Bot) -> None:
-        self.bot = bot
+        self.bot: custom.Bot = bot
+        super().__init__()
 
-    @bridge.bridge_command()
+    @discord.slash_command()
     @cooldown(
         key="ping",
         limit=1,
@@ -36,8 +32,7 @@ class BridgePing(commands.Cog):
     )
     async def ping(
         self,
-        ctx: custom.Context,
-        *,
+        ctx: custom.ApplicationContext[PingCommandStrings],
         ephemeral: bool = False,
         use_embed: bool = False,
     ) -> None:
@@ -54,11 +49,11 @@ class BridgePing(commands.Cog):
 
 
 def setup(bot: custom.Bot) -> None:
-    bot.add_cog(BridgePing(bot))
+    bot.add_cog(Ping(bot))
 
 
-def setup_webserver(app: Quart, bot: discord.Bot) -> None:
-    @app.route("/ping")
+def setup_webserver(app: FastAPI, bot: discord.Bot) -> None:
+    @app.get("/ping")
     async def ping() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
         if not bot.user:
             return {"message": "Bot is offline"}

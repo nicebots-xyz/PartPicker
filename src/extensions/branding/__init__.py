@@ -1,6 +1,6 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
-from .branding import default, schema, setup
+from .branding import default, setup
 
-__all__ = ["default", "schema", "setup"]
+__all__ = ["default", "setup"]

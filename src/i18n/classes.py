@@ -1,10 +1,15 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
-from collections.abc import Generator, Iterator
-from typing import Any, Self, override
+import re
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
+from string import Formatter
+from typing import Any, ClassVar, Self, cast, overload, override
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, RootModel, model_validator
+
+from src.log import logger as main_logger
 
 LOCALES = (
     "en-US",
@@ -41,161 +46,290 @@ LOCALES = (
 )
 DEFAULT = "en-US"
 
+logger = main_logger.getChild("i18n")
 
-class RawTranslation(BaseModel):
-    en_US: str | None = Field(None, alias="en-US")  # noqa: N815
-    en_GB: str | None = Field(None, alias="en-GB")  # noqa: N815
-    bg: str | None = None
-    zh_CN: str | None = Field(None, alias="zh-CN")  # noqa: N815
-    zh_TW: str | None = Field(None, alias="zh-TW")  # noqa: N815
-    hr: str | None = None
-    cs: str | None = None
-    da: str | None = None
-    nl: str | None = None
-    fi: str | None = None
-    fr: str | None = None
-    de: str | None = None
-    el: str | None = None
-    hi: str | None = None
-    hu: str | None = None
-    it: str | None = None
-    ja: str | None = None
-    ko: str | None = None
-    lt: str | None = None
-    no: str | None = None
-    pl: str | None = None
-    pt_BR: str | None = Field(None, alias="pt-BR")  # noqa: N815
-    ro: str | None = None
-    ru: str | None = None
-    es_ES: str | None = Field(None, alias="es-ES")  # noqa: N815
-    es_419: str | None = Field(None, alias="es-419")
-    sv_SE: str | None = Field(None, alias="sv-SE")  # noqa: N815
-    th: str | None = None
-    tr: str | None = None
-    uk: str | None = None
-    vi: str | None = None
+# Matches `{namespace.key}` placeholders such as `{commands.help}` or `{emojis.check}`.
+PLACEHOLDER = re.compile(r"\{(\w+)\.([\w-]+)\}")
 
-    class Config:
-        populate_by_name = True
+# Namespaces that `i18n.apply()` registers, known before any bot exists so that stubs can be generated offline.
+BUILTIN_NAMESPACES = frozenset({"commands", "emojis"})
+# Separates the root of a replacement field from its attribute or index accesses, e.g. `{user.name}` or `{items[0]}`.
+FIELD_ACCESS = re.compile(r"[.\[]")
+
+GLOBAL_KV: dict[str, Mapping[str, str]] = {}
+_CACHE: dict[tuple[int, str], tuple[object, Any]] = {}
 
 
-class Translation(BaseModel):
-    def get_for_locale(self, locale: str) -> "TranslationWrapper[Self]":
+@dataclass(frozen=True, slots=True)
+class FormatFields:
+    """The arguments a string expects from ``str.format``.
+
+    Attributes:
+        positional: Number of positional arguments, from ``{}`` or ``{0}`` fields.
+        named: Names of the keyword arguments.
+
+    """
+
+    positional: int = 0
+    named: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.positional or self.named)
+
+
+def format_fields(text: str, namespaces: frozenset[str] | None = None) -> FormatFields | None:
+    """Find the ``str.format`` arguments of a string, ignoring ``{namespace.key}`` placeholders.
+
+    Args:
+        text: The string to inspect.
+        namespaces: Placeholder namespaces resolved by localization, the builtin and registered ones if None.
+
+    Returns:
+        The arguments, None if the string is not a valid format string.
+
+    """
+    if namespaces is None:
+        namespaces = BUILTIN_NAMESPACES | GLOBAL_KV.keys()
+    positional = 0
+    named: dict[str, None] = {}
+    pending = [text]
+    try:
+        while pending:
+            for _, field, spec, _ in Formatter().parse(pending.pop()):
+                if field is None:
+                    continue
+                root = FIELD_ACCESS.split(field, maxsplit=1)[0]
+                if root in namespaces and root != field:
+                    continue
+                if spec:  # specs can hold nested fields, e.g. `{value:{width}}`
+                    pending.append(spec)
+                if not root:
+                    positional += 1
+                elif root.isdigit():
+                    positional = max(positional, int(root) + 1)
+                else:
+                    named[root] = None
+    except ValueError:
+        return None
+    return FormatFields(positional, tuple(named))
+
+
+def add_global_kv(key: str, values: Mapping[str, str]) -> None:
+    """Register a placeholder namespace resolved in every translation string.
+
+    Args:
+        key: Namespace used in placeholders, e.g. ``commands`` for ``{commands.help}``.
+        values: Mapping from placeholder keys to their replacement text.
+
+    """
+    GLOBAL_KV[key] = values
+    clear_cache()
+
+
+def clear_cache() -> None:
+    """Forget every localized view so that placeholders are resolved again on next access."""
+    _CACHE.clear()
+
+
+def _replace(match: re.Match[str]) -> str:
+    """Resolve one placeholder match, leaving unknown namespaces and keys untouched.
+
+    Args:
+        match: A match of ``PLACEHOLDER``.
+
+    Returns:
+        The replacement text, or the original placeholder.
+
+    """
+    return GLOBAL_KV.get(match[1], {}).get(match[2], match[0])
+
+
+def missing_placeholders() -> set[str]:
+    """Find placeholders of a registered namespace whose key does not exist.
+
+    Returns:
+        The unresolvable placeholders, e.g. ``{"{commands.hlep}"}``.
+
+    """
+    return {
+        match[0]
+        for raw in RawTranslation.REGISTRY
+        for text in raw.root.values()
+        for match in PLACEHOLDER.finditer(text)
+        if match[1] in GLOBAL_KV and match[2] not in GLOBAL_KV[match[1]]
+    }
+
+
+def check_placeholders() -> None:
+    """Ensure every ``{namespace.key}`` placeholder of a registered namespace can be resolved.
+
+    Raises:
+        KeyError: If some placeholders reference keys that do not exist.
+
+    """
+    if missing := missing_placeholders():
+        message = "Translations reference unknown keys: " + ", ".join(sorted(missing))
+        logger.error(message)
+        raise KeyError(message)
+
+
+class RawTranslation(RootModel[dict[str, str]]):
+    """A single translatable string, mapping locales to their text."""
+
+    REGISTRY: ClassVar[list["RawTranslation"]] = []
+
+    @model_validator(mode="after")
+    def _check_locales(self) -> Self:
+        if unknown := self.root.keys() - set(LOCALES):
+            raise ValueError(f"Unknown locales {sorted(unknown)}")
+        if DEFAULT not in self.root:
+            raise ValueError(f"Missing the {DEFAULT} translation")
+        self._check_fields()
+        return self
+
+    def _check_fields(self) -> None:
+        """Ensure no locale expects ``str.format`` arguments that the default locale does not.
+
+        Code formats a string with the arguments of its default text, so any other one would fail at runtime.
+
+        Raises:
+            ValueError: If a locale uses a positional or keyword argument the default locale does not.
+
+        """
+        default = format_fields(self.root[DEFAULT])
+        if default is None:
+            return
+        for locale, text in self.root.items():
+            fields = format_fields(text)
+            if fields is None:
+                raise ValueError(f"The {locale} translation is not a valid format string: {text!r}")
+            if extra := [f"{{{name}}}" for name in fields.named if name not in default.named]:
+                raise ValueError(f"The {locale} translation uses {', '.join(extra)}, unknown in {DEFAULT}")
+            if (count := fields.positional) > default.positional:
+                raise ValueError(f"The {locale} translation uses {count} positional fields, more than {DEFAULT}")
+
+    @override
+    def model_post_init(self, context: Any, /) -> None:
+        RawTranslation.REGISTRY.append(self)
+
+    def get_for_locale(self, locale: str | None) -> str:
+        """Get the text for a locale, falling back to the default locale.
+
+        Args:
+            locale: The locale to get the text for.
+
+        Returns:
+            The text with its global placeholders resolved.
+
+        """
         return apply_locale(self, locale)
 
 
-class TranslationWrapper[T: "Translatable"]:
-    def __init__(self, model: "Translatable", locale: str, default: str = DEFAULT) -> None:
-        self._model: T = model
-        self._default: str
-        self.default = default.replace("-", "_")
-        self._locale: str
-        self.locale = locale.replace("-", "_")
+class Translation(BaseModel):
+    def get_for_locale(self, locale: str | None) -> "Strings":
+        """Localize this translation.
 
-    def _wrap_value(self, value: Any) -> Any:
-        """Consistently wrap values in TranslationWrapper if needed."""
-        if value is None:
-            return None
-        if isinstance(value, str | int | float | bool):
-            return value
-        if isinstance(value, RawTranslation):
-            try:
-                return getattr(value, self._locale) or getattr(value, self._default)
-            except AttributeError:
-                return getattr(value, self._default)
-        if isinstance(value, list | tuple):
-            return [self._wrap_value(item) for item in value]
+        Args:
+            locale: The locale to localize for.
 
-        # For any other type (including Pydantic models), apply locale
-        return apply_locale(value, self._locale)
+        Returns:
+            The localized view of this translation.
+
+        """
+        return apply_locale(self, locale)
+
+
+class Strings(Mapping[str, Any]):
+    """A translation localized for one locale, readable by attribute or by key."""
+
+    def __init__(self, values: Mapping[str, Any]) -> None:
+        self.__dict__.update(values)
+
+    @override
+    def __getitem__(self, key: str) -> Any:
+        return self.__dict__[key]
 
     def __getattr__(self, key: str) -> Any:
-        if isinstance(self._model, dict):
-            if key not in self._model:
-                raise AttributeError(f'Key "{key}" not found in {self._model}')
-            value = self._model[key]
-        else:
-            value = getattr(self._model, key)
-        return self._wrap_value(value)
+        raise AttributeError(f"No translation for {key!r}")
 
-    def __getitem__(self, item: Any) -> Any:
-        if isinstance(self._model, dict):
-            if not isinstance(item, str):
-                raise TypeError(f"Key must be a string, not {type(item).__name__}")
-            return self.__getattr__(item)
-        if isinstance(self._model, list):
-            if not isinstance(item, int):
-                raise TypeError(f"Index must be an integer, not {type(item).__name__}")
-            return self._wrap_value(self._model[item])
-        return self.__getattr__(item)
+    @override
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.__dict__)
 
-    def keys(self) -> Generator[str, None, None]:
-        if not isinstance(self._model, dict):
-            raise TypeError(f"Cannot get keys from {type(self._model).__name__}")
-        yield from self._model.keys()
-
-    def items(self) -> Generator[tuple[str, Any], None, None]:
-        if isinstance(self._model, dict):
-            for key, value in self._model.items():
-                yield key, self._wrap_value(value)
-        else:
-            for key in self.keys():
-                yield key, self._wrap_value(getattr(self._model, key))
-
-    def values(self) -> Generator[Any, None, None]:
-        if isinstance(self._model, dict):
-            for value in self._model.values():
-                yield self._wrap_value(value)
-        else:
-            for key in self.keys():
-                yield self._wrap_value(getattr(self._model, key))
-
-    def __iter__(self) -> Iterator[Any]:
-        if isinstance(self._model, list):
-            for item in self._model:
-                yield self._wrap_value(item)
-        else:
-            yield from self.keys()
-
+    @override
     def __len__(self) -> int:
-        if isinstance(self._model, dict):
-            return len(self._model)
-        if isinstance(self._model, list):
-            return len(self._model)
-        return len(self._model.__dict__)
-
-    @property
-    def locale(self) -> str:
-        return self._locale
-
-    @locale.setter
-    def locale(self, value: str | None) -> None:  # pyright: ignore[reportPropertyTypeMismatch]
-        if value is None:
-            value = self.default
-        if value.replace("_", "-") not in LOCALES:
-            raise ValueError(f"Invalid locale {value}")
-        self._locale = value
-
-    @property
-    def default(self) -> str:
-        return self._default
-
-    @default.setter
-    def default(self, value: str) -> None:
-        if value.replace("_", "-") not in LOCALES:
-            raise ValueError(f"Invalid locale {value}")
-        self._default = value
+        return len(self.__dict__)
 
     @override
     def __repr__(self) -> str:
-        return f"TranslationWrapper({self._model!r}, locale={self._locale!r}, default={self._default!r})"
-
-    @override
-    def __str__(self) -> str:
-        return str(self._model)
+        return f"Strings({self.__dict__!r})"
 
 
-Translatable = Translation | dict[str, RawTranslation] | dict[str, RawTranslation]
+def typed[T](strings: Strings, protocol: type[T]) -> T:  # noqa: ARG001
+    """Type a localized view with the protocol that ``pdm run i18n-stubs`` generated for it.
+
+    Args:
+        strings: The localized view, e.g. ``ctx.translations``.
+        protocol: The generated protocol, e.g. ``PingCommandStrings``.
+
+    Returns:
+        The same view, typed with the protocol.
+
+    """
+    return cast("T", strings)
+
+
+type Translatable = Translation | Mapping[str, RawTranslation]
+
+
+def _localize(value: object, locale: str) -> Any:
+    """Recursively turn a translation tree into plain values for one locale.
+
+    Args:
+        value: A translation, a mapping or list of them, or any plain value.
+        locale: The locale to localize for.
+
+    Returns:
+        Strings for models and mappings, lists for lists, text for raw translations, other values as is.
+
+    """
+    if isinstance(value, RawTranslation):
+        return PLACEHOLDER.sub(_replace, value.root.get(locale) or value.root[DEFAULT])
+    if isinstance(value, BaseModel):
+        value = dict(value)
+    if isinstance(value, Mapping):
+        items: Mapping[str, object] = value  # pyright: ignore[reportUnknownVariableType]
+        return Strings({key: _localize(item, locale) for key, item in items.items()})
+    if isinstance(value, list):
+        elements: list[object] = value  # pyright: ignore[reportUnknownVariableType]
+        return [_localize(item, locale) for item in elements]
+    return value
+
+
+@overload
+def apply_locale(model: RawTranslation, locale: str | None) -> str: ...
+@overload
+def apply_locale(model: Translatable, locale: str | None) -> Strings: ...
+
+
+def apply_locale(model: RawTranslation | Translatable, locale: str | None) -> str | Strings:
+    """Localize a translation, computing it once per locale.
+
+    The model must be long-lived, as it is kept in the cache.
+
+    Args:
+        model: The translation to localize.
+        locale: The locale to localize for, the default locale if None.
+
+    Returns:
+        The localized text for a raw translation, its localized view otherwise.
+
+    """
+    locale = locale or DEFAULT
+    key = (id(model), locale)
+    if key not in _CACHE:
+        _CACHE[key] = (model, _localize(model, locale))
+    return _CACHE[key][1]
 
 
 class NameDescriptionTranslation(Translation):
@@ -225,18 +359,3 @@ AnyCommandTranslation = Deg1CommandTranslation | Deg2CommandTranslation | Deg3Co
 class ExtensionTranslation(Translation):
     commands: dict[str, Deg1CommandTranslation] | None = None
     strings: dict[str, RawTranslation] | None = None
-
-
-def apply_locale[T: "Translatable"](
-    model: T,
-    locale: str | None,
-    default: str | None = DEFAULT,
-) -> TranslationWrapper[T]:
-    default = default if default is not None else DEFAULT
-    if locale is None:
-        locale = DEFAULT
-    if isinstance(model, TranslationWrapper):
-        model.locale = locale
-        model.default = default
-        return model
-    return TranslationWrapper(model, locale, default)

@@ -1,5 +1,5 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
 import math
 from typing import Any
@@ -7,7 +7,6 @@ from typing import Any
 import aiohttp
 import discord
 from discord.ext import commands, tasks
-from schema import Schema
 
 from src.log import logger
 
@@ -17,20 +16,13 @@ default = {
     "every": 60,
 }
 
-schema = Schema(
-    {
-        "enabled": bool,
-        "url": str,
-        "every": int,
-    },
-)
-
 
 class Status(commands.Cog):
     def __init__(self, bot: discord.Bot, config: dict[Any, Any]) -> None:
         self.bot: discord.Bot = bot
         self.config: dict[Any, Any] = config
         self.push_status_loop: tasks.Loop = tasks.loop(seconds=self.config["every"])(self.push_status_loop_meth)  # pyright: ignore [reportMissingTypeArgument]
+        super().__init__()
 
     @commands.Cog.listener(once=True)
     async def on_ready(self) -> None:

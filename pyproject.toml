@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 [project]
 name = "botkit"
 version = "0.1.0"
@@ -6,40 +8,43 @@ authors = [
     {name = "Paillat-dev", email = "me@paillat.dev"},
 ]
 dependencies = [
-    "py-cord>=2.5.0",
     "aiohttp>=3.9.5",
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "orjson>=3.10.7",
-    "pytz>=2024.1",
     "typing-extensions>=4.12.2",
-    "schema>=0.7.7",
-    "hypercorn>=0.17.3",
-    "quart>=0.19.6",
-    "pydantic>=2.9.2",
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.10.6",
     "coloredlogs>=15.0.1",
     "aiofile>=3.9.0",
     "sentry-sdk>=2.18.0",
     "aiocache[redis]>=0.12.3",
-    "tortoise-orm[asyncpg]>=0.23.0",
+    "tortoise-orm[asyncpg]>=0.23.0,<1.0.0",
     "aerich[toml]>=0.8.1",
+    "py-cord>=2.7.0rc2",
+    "cachetools>=7.0.1",
     "pypartpicker>=1.9.5,<2.0.0",
     "aiolimiter>=1.1.0",
-    "pycord-rest-bot>=0.1.0a7",
+    "tortoise-extensions[s3]~=0.0.2",
 ]
 requires-python = "==3.12.*"
-readme = "README.md"
+readme = "readme.md"
 license = {text = "MIT"}
 
 
 [tool.pdm.scripts]
 format = "ruff format ."
 lint = "ruff check --fix ."
-export = "pdm export -o requirements.txt --prod"
 tests = "pytest tests"
+typecheck = "basedpyright ."
 start = "python src"
 check-listings = {call = "scripts:check_listings.main"}
 convert-config = { call = "scripts.convert_config:main" }
+i18n-stubs = { call = "scripts.i18n_stubs:main" }
+"docs:build" = "zensical build --clean"
+"docs:dev" = "zensical serve"
+"docs:preview" = "python -m http.server 8000 -d site"
 
 [tool.pdm]
 distribution = false
@@ -55,6 +60,12 @@ dev = [
     "ruff>=0.6.9",
 ]
 
+[dependency-groups]
+docs = [
+    "mkdocstrings[python]>=1.0.3",
+    "zensical>=0.0.24",
+]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
@@ -63,6 +74,10 @@ reportUnusedCallResult = false
 reportUnknownMemberType = false
 reportMissingTypeStubs = false
 pythonVersion = "3.12"
+
+[[tool.pyright.executionEnvironments]]
+root = "src/database/models"
+reportUninitializedInstanceVariable = false
 
 [tool.ruff]
 target-version = "py312"
@@ -84,7 +99,6 @@ docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
 select = ["ALL"]
-per-file-ignores = { "src/database/migrations/*"= ["INP001", "ARG001"], "tests/*"= ["S101"], "scripts/**" = ["T201"]  }
 extend-ignore = [
     "N999",
     "D104",
@@ -110,10 +124,24 @@ extend-ignore = [
     "FBT002",
     "PLR2004",
     "PLR0913",
-    "C901"
+    "C901",
+    "RUF200",
+    "CPY001" # Managed by licensor
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/database/migrations/*"= ["INP001", "ARG001", "E501"]
+"tests/*"= ["S101"]
+"scripts/**" = ["T201"]
 
 [tool.aerich]
 tortoise_orm = "src.database.config.TORTOISE_ORM"
 location = "./src/database/migrations"
 src_folder = "./."
+
+[tool.pdm.resolution]
+exclude-newer = "7d"
+
+[tool.pdm.resolution.exclude-newer-override]
+# First-party package, released alongside botkit changes.
+tortoise-extensions = false

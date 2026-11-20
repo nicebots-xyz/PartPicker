@@ -1,19 +1,18 @@
-# Copyright (c) NiceBots
 # SPDX-License-Identifier: MIT
-
+# Copyright: 2024-2026 NiceBots.xyz
 import time
 from collections.abc import Awaitable, Callable, Coroutine
 from enum import Enum
 from functools import wraps
 from inspect import isawaitable
-from typing import Any, Concatenate, cast
+from typing import Any, Concatenate, Never, cast
 
 import discord
 from discord.ext import commands
 
 from src import custom
 
-type ReactiveCooldownSetting[T: Any] = T | Callable[[custom.Bot, custom.Context], T | Coroutine[Any, Any, T]]
+type ReactiveCooldownSetting[T] = T | Callable[[custom.Bot, custom.Context], T | Coroutine[Never, None, T]]
 type CogCommandFunction[T: commands.Cog, **P] = Callable[Concatenate[T, P], Awaitable[None]]
 
 
@@ -54,10 +53,12 @@ def get_bucket_key(ctx: custom.Context, base_key: str, bucket_type: BucketType) 
         case BucketType.GUILD:
             return f"{base_key}:guild:{ctx.guild.id}" if ctx.guild else base_key
         case BucketType.CHANNEL:
-            return f"{base_key}:channel:{ctx.channel.id}"
+            channel_id = ctx.channel.id if ctx.channel else 0
+            return f"{base_key}:channel:{channel_id}"
         case BucketType.CATEGORY:
-            category_id = ctx.channel.category_id if hasattr(ctx.channel, "category_id") else None
-            return f"{base_key}:category:{category_id}" if category_id else f"{base_key}:channel:{ctx.channel.id}"
+            category_id = getattr(ctx.channel, "category_id", None) if ctx.channel else None
+            channel_id = ctx.channel.id if ctx.channel else 0
+            return f"{base_key}:category:{category_id}" if category_id else f"{base_key}:channel:{channel_id}"
         case BucketType.ROLE:
             if ctx.guild and hasattr(ctx.author, "roles") and isinstance(ctx.author, discord.Member):
                 top_role_id = max((role.id for role in ctx.author.roles), default=0)
@@ -75,6 +76,7 @@ def cooldown[C: commands.Cog, **P](
     bucket_type: ReactiveCooldownSetting[BucketType] = BucketType.DEFAULT,
     strong: ReactiveCooldownSetting[bool] = False,
     cls: ReactiveCooldownSetting[type[CooldownExceeded]] = CooldownExceeded,
+    extra_key: Callable[[dict[str, Any]], str | None] | None = None,
 ) -> Callable[[CogCommandFunction[C, P]], CogCommandFunction[C, P]]:
     """Enhanced cooldown decorator that supports different bucket types.
 
@@ -86,6 +88,13 @@ def cooldown[C: commands.Cog, **P](
         bucket_type: Type of bucket to use for the cooldown
         strong: If True, adds current timestamp even if limit is reached
         cls: Custom exception class to raise
+        extra_key: Optional callable receiving the decorated command's resolved keyword
+            arguments (the same kwargs the command itself receives, e.g. a `user` option)
+            and returning an extra segment to fold into the cooldown key on top of
+            `bucket_type` -- for example a target user's id, for a per-(actor, target)
+            pair cooldown rather than a plain per-actor one. Returning `None` skips the
+            cooldown check entirely for that invocation (e.g. an optional target wasn't
+            supplied, so there's no pair to rate-limit). Omit for the existing behavior.
 
     """
 
@@ -103,6 +112,13 @@ def cooldown[C: commands.Cog, **P](
 
             # Generate the full cooldown key based on bucket type
             full_key = get_bucket_key(ctx, key_value, bucket_type_value)
+
+            if extra_key is not None:
+                segment = extra_key(cast("dict[str, Any]", kwargs))
+                if segment is None:
+                    await func(self, *args, **kwargs)
+                    return
+                full_key = f"{full_key}:{segment}"
 
             now = time.time()
             time_stamps = cast("tuple[float, ...]", await cache.get(full_key, default=(), namespace="cooldown"))

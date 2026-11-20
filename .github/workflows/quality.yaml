@@ -1,50 +1,47 @@
 name: Quality Checks
 
+# Every check runs as a step of a single job: Actions bills each job rounded up to the minute,
+# so one job with one dependency install costs far less than a job per check.
+
 on:
   workflow_call:
   workflow_dispatch:
 
 jobs:
   quality:
+    name: Quality
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        check: [format, lint, test]
-        include:
-          - check: format
-            name: "Format Check"
-            command: "pdm run ruff format --check ."
-          - check: lint
-            name: "Lint Check"
-            command: "pdm run ruff check ."
-          - check: test
-            name: "Tests Check"
-            command: "pdm run tests"
-
-    name: ${{ matrix.name }}
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup PDM
-        uses: pdm-project/setup-pdm@v4
+        uses: pdm-project/setup-pdm@544d7237314ee09c256785bd360f6b30add38b37 # v4.6
         with:
           cache: true
 
       - name: Install dependencies
+        id: install
         run: pdm install -d
 
-      - name: ${{ matrix.name }}
-        run: ${{ matrix.command }}
+      - name: Format Check
+        run: pdm run ruff format --check .
 
-  check-license-header:
-    name: License Header Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Copywrite
-        uses: hashicorp/setup-copywrite@5e3e8a26d7b9f8a508848ad0a069dfd2f7aa5339
-      - name: Check Header Compliance
-        run: copywrite headers --plan --config .copywrite.hcl
+      - name: Lint Check
+        if: ${{ !cancelled() && steps.install.outcome != 'failure' }}
+        run: pdm run ruff check .
+
+      - name: Tests Check
+        if: ${{ !cancelled() && steps.install.outcome != 'failure' }}
+        run: pdm run tests
+
+      - name: Translation Stubs Check
+        if: ${{ !cancelled() && steps.install.outcome != 'failure' }}
+        run: pdm run i18n-stubs --check
+
+      - name: Setup Licensor
+        if: ${{ !cancelled() }}
+        uses: nicebots-xyz/licensor/.github/actions/setup-licensor@577188f94866994b07577a82aae6d59680427d8d # v0.2.1
+
+      - name: License Header Check
+        if: ${{ !cancelled() }}
+        run: licensor check * --ignore ".*"

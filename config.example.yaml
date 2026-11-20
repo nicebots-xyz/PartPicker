@@ -1,5 +1,5 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
 #file: noinspection SpellCheckingInspection
 extensions:
@@ -10,14 +10,6 @@ extensions:
     enabled: true
   branding:
     enabled: true
-    embed:
-      footer:
-        value: "By nicebots.xyz"
-        time: true # Include the current time in the footer
-        tz: "Europe/Zurich"
-      author: "Cool Bot"
-      author_url: https://picsum.photos/512
-      color: "#ffffff"
     status:
       playing:
         - "with stuff"
@@ -33,9 +25,13 @@ extensions:
       streaming:
         - "on Twitch"
         - "on YouTube"
+      custom:
+        - "Shipping features"
       every: 300 # 300 seconds = 5 minutes
 bot:
   token: "bot token here" # Your bot token
+  slash:
+    enabled: true # Enable slash commands
   cache:
     type: "memory" # Cache type. Possible values: "memory" or "redis"
     redis: # Redis configuration (only used if type is "redis")
@@ -44,8 +40,16 @@ bot:
       db: 0 # Redis database number
       password: null # Redis password (optional)
       ssl: false # Whether to use SSL for Redis connection
+backend:
+  host: "0.0.0.0"
+  port: 5000
+  access_log: true
+  server_header: false
 logging:
   level: "INFO" # The logging level. Possible values: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console: true
+  file: true
+  directory: "logs"
 use:
   bot: true # Whether to run the bot
   backend: false # Whether to run the backend

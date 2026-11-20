@@ -1,5 +1,5 @@
-# Copyright (c) NiceBots.xyz
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
 import contextlib
 import logging
@@ -9,8 +9,9 @@ from typing import Any, final, overload
 import discord
 import sentry_sdk
 
-from src import custom
-from src.i18n.classes import RawTranslation, apply_locale
+from src import custom, i18n
+from src.extensions.nice_errors.translation_types import ExtensionStrings
+from src.i18n.classes import RawTranslation
 
 logger = logging.getLogger("bot").getChild("nice_errors").getChild("handlers")
 
@@ -46,7 +47,7 @@ class BaseErrorHandler[E: Exception](ABC):
         return _get_locale(ctx)
 
 
-type ErrorHandlerRType = tuple[bool, bool, str, dict[str, Any]]
+type ErrorHandlerRType = tuple[bool, bool, str, dict[str, Any]]  # handled, report, message, sendargs
 type ErrorHandlerType[E: Exception] = BaseErrorHandler[E]
 type ErrorHandlersType[E: Exception] = dict[
     type[E] | None,
@@ -82,7 +83,7 @@ class ErrorHandlerManager:
             "ephemeral": True,
         }
         message: str = ""
-        translations = apply_locale(raw_translations, _get_locale(ctx))
+        translations = i18n.typed(i18n.apply_locale(raw_translations, _get_locale(ctx)), ExtensionStrings)
         if isinstance(error, discord.ApplicationCommandInvokeError):
             original_error = error.original
 
@@ -115,6 +116,10 @@ class ErrorHandlerManager:
             f"Adding error handler {handler.__class__.__qualname__} for {error.__qualname__ if error is not None else 'Generic'}"  # noqa: E501
         )
         self.error_handlers[error] = handler
+
+    def remove_error_handler[E: Exception](self, error: type[E]) -> None:
+        logger.info(f"Removing error handler {error.__qualname__}")
+        del self.error_handlers[error]
 
 
 __all__ = (

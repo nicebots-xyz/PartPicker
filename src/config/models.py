@@ -1,11 +1,12 @@
-# Copyright (c) NiceBots
 # SPDX-License-Identifier: MIT
+# Copyright: 2024-2026 NiceBots.xyz
 
-from typing import Any, Literal, overload, override
 
-from pydantic import BaseModel
+from typing import Annotated, Literal, overload, override
 
-type Extension = dict[str, Any]
+from pydantic import BaseModel, Discriminator, Tag
+
+type Extension = dict[str, object]
 
 
 class RedisConfig(BaseModel):
@@ -57,10 +58,14 @@ class BotConfig(BaseModel):
     slash: SlashConfig = SlashConfig(enabled=False)
     cache: CacheConfig = CacheConfig()
     rest: RestConfig = RestConfig()
+    cache_app_emojis: bool = True
 
 
 class LoggingConfig(BaseModel):
     level: Literal["DEBUG", "INFO", "WARNING", "SUCCESS", "ERROR", "CRITICAL"] = "INFO"
+    console: bool = True
+    file: bool = False
+    directory: str = "logs"
 
 
 class UseConfig(BaseModel):
@@ -68,14 +73,65 @@ class UseConfig(BaseModel):
     backend: bool = False
 
 
+class BackendConfig(BaseModel):
+    host: str = "0.0.0.0"  # noqa: S104
+    port: int = 5000
+    access_log: bool = True
+    server_header: bool = False
+
+
+class S3StorageConfig(BaseModel):
+    type: Literal["s3"] = "s3"
+    endpoint: str
+    bucket: str
+    access_key: str
+    secret_key: str
+    region: str | None = None
+    ssl: bool = True
+
+
+class MemoryStorageConfig(BaseModel):
+    type: Literal["memory"]
+
+
+class LocalStorageConfig(BaseModel):
+    type: Literal["local"]
+    path: str
+
+
+def _storage_type(value: object) -> str:
+    if isinstance(value, dict):
+        return str(value.get("type", "s3"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+    return str(getattr(value, "type", "s3"))
+
+
+StorageConfig = Annotated[
+    Annotated[S3StorageConfig, Tag("s3")]
+    | Annotated[MemoryStorageConfig, Tag("memory")]
+    | Annotated[LocalStorageConfig, Tag("local")],
+    Discriminator(_storage_type),
+]
+
+
+class DbExtraApp(BaseModel):
+    url: str | None = None
+    params: dict[str, object] | None = None
+    models: list[str] = []
+    s3: StorageConfig | None = None
+
+
 class DbConfig(BaseModel):
     url: str
     enabled: bool = True
+    params: dict[str, object] | None = None
+    extra_apps: dict[str, DbExtraApp] = {}
+    s3: StorageConfig | None = None
 
 
 class Config(BaseModel):
     db: DbConfig = DbConfig(url="", enabled=False)
     bot: BotConfig = BotConfig(token="")
+    backend: BackendConfig = BackendConfig()
     logging: LoggingConfig = LoggingConfig()
     use: UseConfig = UseConfig()
     extensions: dict[str, Extension] = {}
