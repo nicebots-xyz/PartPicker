@@ -1,21 +1,5 @@
 # PartPicker Bot
 
->[!WARNING]
->This Discord bot is subject to special licensing terms. Please read the full [NiceBots Discord Bot License Agreement Version 1.0](https://docs.nicebots.xyz/en/NiceBots-Discord-Bot-License-Agreement-Version-1-0) for complete details.
-
->[!IMPORTANT]
->**Key License Points:**
->- Personal or internal business use only
->- No commercial or economic gain (including donations)
->- All modifications must be publicly shared
->- Clear attribution required
->- Contributions grant full rights to NiceBots.xyz
->- License termination upon legal dispute
->- No use of NiceBots.xyz trademarks
-
->[!NOTE]
->This summary is not legally binding. Refer to the full license text for all terms and conditions.
-
 ## Features
 
 The PartPicker Bot enhances your Discord server by automatically processing PCPartPicker links:
@@ -40,7 +24,7 @@ The PartPicker Bot enhances your Discord server by automatically processing PCPa
 
 1. **Clone the Repository**
 ```
-git clone https://github.com/nicebots-xyz/auto-pc-part-picker.git
+git clone https://github.com/nicebots-xyz/PartPicker.git
 ```
 
 2. **Install Dependencies**
@@ -65,21 +49,6 @@ use:
   backend: false
 ```
 
-4. **Attribution and Disclosure**
->[!CAUTION]
->To follow the license terms, you must include the following in your Discord Bot Description:
-```
-This Discord Bot, [Bot Name], is based on PartPicker by NiceBots.xyz.
-Original Source: https://github.com/nicebots-xyz/PartPicker
-This version has been modified by [Your Name/Entity], accessible at [Link to Your Fork],
-is operated by [Your Name/Entity] and is not affiliated with NiceBots.xyz or Discord Inc.
-```
-
-5. **Run the Bot**
-   ```
-   pdm run start
-   ```
-
 ## Usage
 
 >[!TIP]
@@ -92,19 +61,9 @@ is operated by [Your Name/Entity] and is not affiliated with NiceBots.xyz or Dis
 >- User: "Check out my build: https://pcpartpicker.com/list/abc123"
 >- Bot: *Replies with an embed containing the parts list*
 
-## Legal Compliance
-
->[!CAUTION]
->- Ensure all usage complies with the [full license agreement](https://docs.nicebots.xyz/en/NiceBots-Discord-Bot-License-Agreement-Version-1-0).
->- Maintain all copyright notices and license terms in your fork.
->- Do not use for any commercial purposes, including indirect methods like donations.
-
 ## Support
 
 >[!NOTE]
 >For issues or questions:
->- Join the [official Discord server](https://paill.at/OjTuQ)
+>- Join the [official Discord server](https://nicebots.xyz/discord)
 >- Send an email to hello [at] nicebots.xyz
-
->[!IMPORTANT]
->By using, modifying, or distributing this bot, you agree to the terms of the NiceBots Discord Bot License Agreement Version 1.0.
